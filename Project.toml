@@ -1,0 +1,4 @@
+name = "Recluse"
+uuid = "d7e13037-544e-446f-97a1-240955fde5ba"
+authors = ["Nicholas Stone <nicholasestone@proton.me>"]
+version = "0.1.0"
