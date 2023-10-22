@@ -1,5 +1,7 @@
 module Recluse
 
+using RecipesBase
+
 export Hammock, savegwl
 
 """
@@ -45,6 +47,12 @@ struct Hammock
         pointsmat=vcat((permutedims(p) for p in transformedpointsvec)...)
         return new(pointsmat)
     end
+end
+
+#add a plot recipe
+@recipe function plothammock(h::Hammock)
+    aspect_ratio --> 1
+    (h.points[:,1], h.points[:,2])
 end
 
 function Base.print(io::IO,h::Hammock)
