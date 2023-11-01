@@ -1,7 +1,7 @@
 name = "Recluse"
 uuid = "d7e13037-544e-446f-97a1-240955fde5ba"
 authors = ["Nicholas Stone <nicholasestone@proton.me>"]
-version = "0.2.0"
+version = "0.2.1"
 
 [deps]
 RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"

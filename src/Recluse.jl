@@ -85,7 +85,7 @@ function savegwl(filename::String,h::GWLObject)
     end
 end
 
-function savegwl(filename::String,h::Hammock;bufsize)
+function savegwl(filename::String,h::Hammock;bufsize=200)
     open(filename,"w") do io
         print(io,h;bufsize)
     end
