@@ -75,13 +75,15 @@ end
 
 """
 ```julia
-savegwl(filename,element)
+savegwl(filename,objects...)
 ```
 Save a .gwl file
 """
-function savegwl(filename::String,h::GWLObject)
+function savegwl(filename::String,h::GWLObject...)
     open(filename,"w") do io
-        print(io,h)
+        for hi in h
+            print(io,hi)
+        end
     end
 end
 
@@ -233,6 +235,10 @@ struct Box <: GWLObject
             added = -1*(zoffset * tan.(chamfer))
             #the change in the center of the crosssection
             deltacenter = (added[:,2] - added[:,1]) / 2
+            #we need to apply the eventual rotation to deltacenter
+            rotmatrix=[cos(rotation) -sin(rotation)
+                       sin(rotation) cos(rotation)]
+            deltacenter = rotmatrix * deltacenter
             thiscenter=center[1:2] + deltacenter
             (lprime,wprime) = [length,width] + sum(added,dims=2)
             #we have to swap the length and width if i is odd
