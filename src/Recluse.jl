@@ -198,34 +198,50 @@ end
 
 """
 ```julia
-Box(length, width, height, dslice, dhatch; [rotation,center])
+Box(length, width, height, dslice, dhatch; [rotation,center,chamfer])
 ```
 Build a 3D box with the provided dimensions. `dslice` and `dhatch`
 are the maximum allowable slicing and hatching distances (the number
 of required layers and lines will be rounded up). When `rotation` is
 zero, the dimension corresponding to `length` will be along the x axis.
+`chamfer` should be a matrix with size (2,2) specifying the angle with
+which the edges of the box should be tapered. chamfer[1,:] specifies
+tapering normal to the 'length' dimension, chamfer[2,:] specifies
+tapering normal to `width`. If `chamfer` is provided the box has a
+crossection of ``length × width`` at the z coordinate corresponding to
+the center of the object.
 """
 struct Box <: GWLObject
     hammocks::Vector{Hammock} #a box is just a bunch of hammocks
     function Box(length::Number, width::Number, height::Number,
                  dslice::Number, dhatch::Number;
-                 rotation = 0, center=[0,0,0])
+                 rotation = 0, center=[0,0,0],
+                 chamfer=zeros(Float64,2,2))
+        @assert size(center) == (3,)
+        @assert size(chamfer) == (2,2)
         #get the z position of all of our layers
         numz = ceil(Int,height/dslice) #minimum value for dslice
         zpos=range(center[3] - height/2,
                    center[3] + height/2, length = numz) |> collect
-        #the number of threads will vary between our alternating
-        #hammocks unless the aspect ratio in the xy plane is 1.
-        numthreadodd = ceil(Int,length/dhatch)
-        numthreadeven = ceil(Int,width/dhatch)
         #build all of the hammocks
         hammocks = map(1:Base.length(zpos)) do i
-            nt = isodd(i) ? numthreadodd : numthreadeven
+            #apply the chamfer
+            zoffset=zpos[i] - center[3]
+            #amount of material added to each edge
+            #negative sign so positive chamfers correspond to shapes
+            #without overhang
+            added = -1*(zoffset * tan.(chamfer))
+            #the change in the center of the crosssection
+            deltacenter = (added[:,2] - added[:,1]) / 2
+            thiscenter=center[1:2] + deltacenter
+            (lprime,wprime) = [length,width] + sum(added,dims=2)
+            #we have to swap the length and width if i is odd
             rot = isodd(i) ? rotation : (rotation + pi/2)
-            #length and width should be swapped if i is even
-            l = isodd(i) ? length : width
-            w = isodd(i) ? width : length
-            Hammock(l,w,zpos[i],nt,rotation=rot,center=center[1:2])
+            l = isodd(i) ? lprime : wprime
+            w = isodd(i) ? wprime : lprime
+            #calculate the number of lines
+            nt=ceil(Int,l/dhatch)
+            Hammock(l,w,zpos[i],nt,rotation=rot,center=thiscenter)
         end
         new(hammocks)
     end
