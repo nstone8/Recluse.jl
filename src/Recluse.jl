@@ -2,7 +2,7 @@ module Recluse
 
 using RecipesBase
 
-export Hammock, savegwl, Window
+export Hammock, savegwl, Window, Box
 
 abstract type GWLObject end #supertype for things representable by gwl code
 
@@ -195,4 +195,54 @@ function Base.print(io::IO,w::Window)
         println(io,"write")
     end
 end
+
+"""
+```julia
+Box(length, width, height, dslice, dhatch; [rotation,center])
+```
+Build a 3D box with the provided dimensions. `dslice` and `dhatch`
+are the maximum allowable slicing and hatching distances (the number
+of required layers and lines will be rounded up). When `rotation` is
+zero, the dimension corresponding to `length` will be along the x axis.
+"""
+struct Box <: GWLObject
+    hammocks::Vector{Hammock} #a box is just a bunch of hammocks
+    function Box(length::Number, width::Number, height::Number,
+                 dslice::Number, dhatch::Number;
+                 rotation = 0, center=[0,0,0])
+        #get the z position of all of our layers
+        numz = ceil(Int,height/dslice) #minimum value for dslice
+        zpos=range(center[3] - height/2,
+                   center[3] + height/2, length = numz) |> collect
+        #the number of threads will vary between our alternating
+        #hammocks unless the aspect ratio in the xy plane is 1.
+        numthreadodd = ceil(Int,length/dhatch)
+        numthreadeven = ceil(Int,width/dhatch)
+        #build all of the hammocks
+        hammocks = map(1:Base.length(zpos)) do i
+            nt = isodd(i) ? numthreadodd : numthreadeven
+            rot = isodd(i) ? rotation : (rotation + pi/2)
+            #length and width should be swapped if i is even
+            l = isodd(i) ? length : width
+            w = isodd(i) ? width : length
+            Hammock(l,w,zpos[i],nt,rotation=rot,center=center[1:2])
+        end
+        new(hammocks)
+    end
+end
+
+function Base.print(io::IO,b::Box)
+    print.(io,b.hammocks)
+    return nothing
+end
+
+@recipe function plotbox(b::Box)
+    aspect_ratio --> 1
+    for h in b.hammocks
+        @series begin
+            (h.points[:,1], h.points[:,2], h.points[:,3])
+        end
+    end
+end
+
 end # module Recluse
