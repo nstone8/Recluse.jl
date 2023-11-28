@@ -206,7 +206,8 @@ end
 
 """
 ```julia
-Box(length, width, height, dslice, dhatch; [rotation,center,chamfer])
+Box(length, width, height;
+    [dslice, dhatch, rotation, center, chamfer])
 ```
 Build a 3D box with the provided dimensions. `dslice` and `dhatch`
 are the maximum allowable slicing and hatching distances (the number
@@ -218,11 +219,18 @@ tapering normal to the 'length' dimension, chamfer[2,:] specifies
 tapering normal to `width`. If `chamfer` is provided the box has a
 crossection of ``length × width`` at the z coordinate corresponding to
 the center of the object.
+
+# Default values for kwargs
+- `dslice` = `1`
+- `dhatch` = `0.3`
+- `rotation` = `0`
+- `center` = `[0,0,0]`
+- `chamfer` = `zeros(Float64,2,2)`
 """
 struct Box <: GWLObject
     hammocks::Vector{Hammock} #a box is just a bunch of hammocks
-    function Box(length::Number, width::Number, height::Number,
-                 dslice::Number, dhatch::Number;
+    function Box(length::Number, width::Number, height::Number;
+                 dslice=1, dhatch=0.3,
                  rotation = 0, center=[0,0,0],
                  chamfer=zeros(Float64,2,2))
         @assert size(center) == (3,)
@@ -275,22 +283,32 @@ end
 
 """
 ```julia
-Cantilever(length,width,height,
-           segmentlength,dslice,dhatch,
-           overlap, overlapangle;
-           [rotation, center, chamfer])
+Cantilever(length,width,height;
+           [segmentlength,dslice,dhatch,
+           overlap, overlapangle,
+           rotation, center, chamfer])
 ```
 Write a segmented cantilever beam which is assumed to be supported on the face
 normal to the `length` direction with the lowest coordinate value. All arguments
 shared with `Box` have the same interpretation. `segmentlength` is the maximum
 length of a single segment, `overlap` is the amount of overlap between neighboring
 segments, `overlapangle` is the angle that the segments are split with.
+
+# Default values for kwargs
+- `segmentlength` = `25`
+- `dslice` = `1`
+- `dhatch` = `0.3`
+- `overlap` = `5`
+- `overlapangle`=pi/6
+- `rotation` = `0`
+- `center` = `[0,0,0]`
+- `chamfer` = `zeros(Float64,2,2)`
 """
 struct Cantilever <: GWLObject
     boxes::Vector{Box}
-    function Cantilever(length::Number, width::Number, height::Number,
-                        segmentlength::Number,dslice::Number,
-                        dhatch::Number,overlap::Number,overlapangle::Number;
+    function Cantilever(length::Number, width::Number, height::Number;
+                        segmentlength=25,dslice=1,dhatch=0.3,
+                        overlap=5,overlapangle=pi/6,
                         rotation = 0, center=[0,0,0],
                         chamfer=zeros(Float64,2,2))
 
