@@ -2,9 +2,16 @@ module Recluse
 
 using RecipesBase
 
-export Hammock, savegwl, Window, Box
+export Hammock, savegwl, Window, Box, Cantilever
 
 abstract type GWLObject end #supertype for things representable by gwl code
+
+#helper function to rotate vectors around the z axis
+function zrotate(v,rotation)
+    rotmatrix=[cos(rotation) -sin(rotation)
+               sin(rotation) cos(rotation)]
+    return rotmatrix*v
+end
 
 """
 ```julia
@@ -38,12 +45,9 @@ struct Hammock <: GWLObject
         pointsvec=map(zip(xpoints,ypoints)) do (x,y) #get a vector of [x,y] coordinate vectors
             [x,y]
         end
-        #build a rotation matrix
-        rotmatrix=[cos(rotation) -sin(rotation)
-                   sin(rotation) cos(rotation)]
         #do the rotation and translation, then add on our z coordinate
         transformedpointsvec=map(pointsvec) do p        
-            vcat(center + (rotmatrix * p),z)
+            vcat(center + zrotate(p,rotation),z)
         end
         #collapse our points vector into a nx2 matrix
         pointsmat=vcat((permutedims(p) for p in transformedpointsvec)...)
@@ -57,6 +61,7 @@ end
 #add a plot recipe
 @recipe function plothammock(h::Hammock)
     aspect_ratio --> 1
+    legend --> false
     (h.points[:,1], h.points[:,2])
 end
 
@@ -178,6 +183,7 @@ end
 #add a plot recipe
 @recipe function plotwindow(w::Window)
     aspect_ratio --> 1
+    legend --> false
     #need to insert 'missing' between each pair of lines
     points=permutedims(w.points)
     points=reshape(points,3,2,:)
@@ -236,9 +242,7 @@ struct Box <: GWLObject
             #the change in the center of the crosssection
             deltacenter = (added[:,2] - added[:,1]) / 2
             #we need to apply the eventual rotation to deltacenter
-            rotmatrix=[cos(rotation) -sin(rotation)
-                       sin(rotation) cos(rotation)]
-            deltacenter = rotmatrix * deltacenter
+            deltacenter = zrotate(deltacenter,rotation)
             thiscenter=center[1:2] + deltacenter
             (lprime,wprime) = [length,width] + sum(added,dims=2)
             #we have to swap the length and width if i is odd
@@ -259,10 +263,85 @@ function Base.print(io::IO,b::Box)
 end
 
 @recipe function plotbox(b::Box)
+    legend --> false
     aspect_ratio --> 1
     for h in b.hammocks
         @series begin
             (h.points[:,1], h.points[:,2], h.points[:,3])
+        end
+    end
+end
+
+
+"""
+```julia
+Cantilever(length,width,height,
+           segmentlength,dslice,dhatch,
+           overlap, overlapangle;
+           [rotation, center, chamfer])
+```
+Write a segmented cantilever beam which is assumed to be supported on the face
+normal to the `length` direction with the lowest coordinate value. All arguments
+shared with `Box` have the same interpretation. `segmentlength` is the maximum
+length of a single segment, `overlap` is the amount of overlap between neighboring
+segments, `overlapangle` is the angle that the segments are split with.
+"""
+struct Cantilever <: GWLObject
+    boxes::Vector{Box}
+    function Cantilever(length::Number, width::Number, height::Number,
+                        segmentlength::Number,dslice::Number,
+                        dhatch::Number,overlap::Number,overlapangle::Number;
+                        rotation = 0, center=[0,0,0],
+                        chamfer=zeros(Float64,2,2))
+
+        nsegments = ceil(Int,length/(segmentlength-(overlap/2)))
+        #if nsegments is one, this could just be a box
+        if nsegments < 2
+            @warn "creating a Cantilever with one segment, consider replacing with a Box"
+            return new([Box(length,width,height,dslice,dhatch;
+                            rotation, center, chamfer)])
+        end
+        #this is the chamfer for the middle segments
+        internalchamfer = hcat([-overlapangle, overlapangle],chamfer[2,:]) |> permutedims
+        #calculate the length of one segment
+        lseg = (length + (nsegments - 1)*overlap) / nsegments
+        #get all of our center x coordinates assuming we are centered
+        #at the origin
+        centersx = range((lseg-length)/2,
+                         (length-lseg)/2,length = nsegments) |> collect
+        #rotate these points
+        rotcenters = zrotate.(collect([cx, 0] for cx in centersx),
+                              rotation)
+        #translate these points
+        centers = map(rotcenters) do rc
+            vcat(rc,[0]) + center
+        end
+        boxes = map(1:Base.length(centers)) do i
+            if i == 1
+                thischamfer=hcat(chamfer[:,1],internalchamfer[:,2])
+            elseif i == nsegments
+                thischamfer=hcat(internalchamfer[:,1],chamfer[:,2])
+            else
+                thischamfer = internalchamfer
+            end
+            Box(lseg,width,height,dslice,dhatch;
+                rotation,center=centers[i],chamfer=thischamfer)
+        end
+        return new(boxes)
+    end
+end
+
+function Base.print(io::IO,c::Cantilever)
+    print.(io,c.boxes)
+    return nothing
+end
+
+@recipe function plotbox(c::Cantilever)
+    aspect_ratio --> 1
+    legend --> false
+    for b in c.boxes
+        @series begin
+            b
         end
     end
 end
