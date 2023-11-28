@@ -299,7 +299,7 @@ segments, `overlapangle` is the angle that the segments are split with.
 - `dslice` = `1`
 - `dhatch` = `0.3`
 - `overlap` = `5`
-- `overlapangle`=pi/6
+- `overlapangle` = `pi/6`
 - `rotation` = `0`
 - `center` = `[0,0,0]`
 - `chamfer` = `zeros(Float64,2,2)`
@@ -316,7 +316,7 @@ struct Cantilever <: GWLObject
         #if nsegments is one, this could just be a box
         if nsegments < 2
             @warn "creating a Cantilever with one segment, consider replacing with a Box"
-            return new([Box(length,width,height,dslice,dhatch;
+            return new([Box(length,width,height;dslice,dhatch,
                             rotation, center, chamfer)])
         end
         #this is the chamfer for the middle segments
@@ -342,7 +342,7 @@ struct Cantilever <: GWLObject
             else
                 thischamfer = internalchamfer
             end
-            Box(lseg,width,height,dslice,dhatch;
+            Box(lseg,width,height;dslice,dhatch,
                 rotation,center=centers[i],chamfer=thischamfer)
         end
         return new(boxes)
