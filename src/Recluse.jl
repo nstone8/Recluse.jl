@@ -2,7 +2,7 @@ module Recluse
 
 using RecipesBase
 
-export Hammock, savegwl, Window, Box, Cantilever
+export Hammock, savegwl, Window, Box, Cantilever, Bridge
 
 abstract type GWLObject end #supertype for things representable by gwl code
 
@@ -81,20 +81,24 @@ end
 """
 ```julia
 savegwl(filename,objects...)
+savegwl(io,objects...)
 ```
 Save a .gwl file
 """
-function savegwl(filename::String,h::GWLObject...)
-    open(filename,"w") do io
-        for hi in h
-            print(io,hi)
-        end
+function savegwl(io::IO,h::GWLObject...)
+    for hi in h
+        print(io,hi)
     end
+
 end
 
-function savegwl(filename::String,h::Hammock;bufsize=200)
+function savegwl(io::IO,h::Hammock;bufsize=200)
+    print(io,h;bufsize)
+end
+
+function savegwl(filename::String,h::GWLObject...)
     open(filename,"w") do io
-        print(io,h;bufsize)
+        savegwl(io,h...)
     end
 end
 
@@ -350,11 +354,11 @@ struct Cantilever <: GWLObject
 end
 
 function Base.print(io::IO,c::Cantilever)
-    print.(io,c.boxes)
+    print(io,c.boxes...)
     return nothing
 end
 
-@recipe function plotbox(c::Cantilever)
+@recipe function plotcantilever(c::Cantilever)
     aspect_ratio --> 1
     legend --> false
     for b in c.boxes
@@ -362,6 +366,92 @@ end
             b
         end
     end
+end
+
+"""
+```julia
+Bridge(length,width,height;
+       [segmentlength,dslice,dhatch,
+       overlap, overlapangle, gap,
+       rotation, center, chamfer])
+```
+Write a segmented bridge which is assumed to be supported on both ends
+normal to the `length` direction. All arguments shared with `Cantilever`
+have the same interpretation. `gap` is the distance (measured at their
+midpoints along the `height` dimension) between the component
+`Cantilever`s before being closed.
+
+# Default values for kwargs
+- `segmentlength` = `25`
+- `dslice` = `1`
+- `dhatch` = `0.3`
+- `overlap` = `5`
+- `overlapangle` = `pi/6`
+- `gap` = `10`
+- `rotation` = `0`
+- `center` = `[0,0,0]`
+- `chamfer` = `zeros(Float64,2,2)`
+"""
+struct Bridge <: GWLObject
+    cantilevers::NTuple{2,Cantilever}
+    keystone::Box
+    function Bridge(length::Number, width::Number, height::Number;
+                    segmentlength=25,dslice=1,dhatch=0.3,
+                    overlap=5,overlapangle=pi/6, gap=10,
+                    rotation = 0, center=[0,0,0],
+                    chamfer=zeros(Float64,2,2))
+        #need to get the length and center positions of the two
+        #cantilevers
+        lc = (length-gap)/2
+        #center positions assuming we are centered at the origin
+        levercenters=((gap + lc)/2)*[-1,1]
+        #do the rotation
+        rotcenters=map(levercenters) do c
+            zrotate([c,0],rotation)
+        end
+        #translate the centers
+        transcenters = [vcat(rc,[0]) + center for rc in rotcenters]
+        #build the levers
+        (leftchamfer,rightchamfer) = map(1:2) do _
+            copy(chamfer)
+        end
+        leftchamfer[1,2] = overlapangle
+        #the right lever will be printed 'backwards' so it should start
+        #with chamfer[1,2] and end with overlapangle
+        rightchamfer[1,:] = [chamfer[1,2], overlapangle]
+        levers = map(zip(transcenters,
+                         [leftchamfer,rightchamfer],
+                         rotation .+ [0,pi])) do (tc,ch,rot)
+            Cantilever(lc,width,height;
+                       center=tc, chamfer=ch, segmentlength,
+                       dslice, dhatch, overlap, overlapangle,
+                       rotation=rot)
+        end
+        #now build the keystone
+        lkey = gap + 2*overlap
+        keychamfer = vcat([-overlapangle -overlapangle ],
+                       permutedims(chamfer[2,:]))
+        keystone = Box(lkey,width,height;
+                       chamfer=keychamfer, dslice, dhatch,
+                       rotation, center)
+        new(Tuple(levers),keystone)
+    end
+end
+
+function Base.print(io::IO,b::Bridge)
+    print(io,b.cantilevers...,b.keystone)
+    return nothing
+end
+
+@recipe function plotbridge(b::Bridge)
+    aspect_ratio --> 1
+    legend --> false
+    for x in b.cantilevers
+        @series begin
+            x
+        end
+    end
+    b.keystone
 end
 
 end # module Recluse
